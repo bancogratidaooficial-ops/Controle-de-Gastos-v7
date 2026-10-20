@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Controle de Gastos V7</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ffcc00">
+<link rel="icon" href="icon-192.png">
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0a0a0a;color:#fff;font-family:Arial;padding:10px;padding-bottom:110px}
+.header{background:#ffcc00;color:#000;padding:16px;border-radius:18px;text-align:center;font-weight:900}
+.header h1{margin:0;font-size:18px}.header p{margin:4px 0 0;font-size:12px;font-weight:700;opacity:.8}
+.cards{display:flex;gap:8px;margin:12px 0}
+.card{flex:1;background:#1a1a1a;border-radius:14px;padding:12px;text-align:center;font-weight:900;border:1px solid #222}
+.card small{display:block;font-size:11px;color:#aaa}
+.entradas{color:#00ff66}.saidas{color:#ff4444}.saldo{color:#ffcc00}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.btn-mini{padding:12px;border-radius:12px;border:0;font-weight:900;font-size:12px}
+.btn-dark{background:#1a1a1a;color:#fff;border:1px solid #333}.btn-yellow{background:#ffcc00;color:#000}
+.form{background:#1a1a1a;border-radius:18px;padding:12px;border:1px solid #222}
+select,input{width:100%;padding:14px;border-radius:12px;border:1px solid #333;background:#000;color:#fff;margin-top:8px;font-size:14px}
+.row{display:flex;gap:8px}.row input{flex:1}
+.btn-main{width:100%;background:#ffcc00;color:#000;border:0;padding:16px;border-radius:14px;font-weight:900;margin-top:12px;font-size:15px}
+.item{background:#151515;border-left:4px solid #ffcc00;border-radius:12px;padding:10px;margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+.item small{color:#888;display:block;font-size:11px}
+.trash{background:#2a2a2a;border:0;padding:10px 14px;border-radius:10px;font-size:16px}
+.link-add{color:#ffcc00;font-size:12px;font-weight:900;text-align:right;display:block;margin-top:6px;cursor:pointer}
+#btnInstalar{position:fixed;bottom:20px;right:20px;left:20px;background:linear-gradient(135deg,#ffcc00,#ffaa00);color:#000;border:0;padding:18px;border-radius:50px;font-weight:900;font-size:16px;box-shadow:0 8px 25px rgba(255,204,0,.5);display:none;z-index:9999;animation:pulsa 1.5s infinite}
+@keyframes pulsa{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+</style>
+</head>
+<body>
+
+<div class="header">
+<h1>💲 CONTROLE DE GASTOS V7 ⚙️</h1>
+<p>Tenha controle sobre seus gastos</p>
+</div>
+
+<div class="cards">
+<div class="card"><small>Entradas R$</small><b class="entradas" id="entradas">0.00</b></div>
+<div class="card"><small>Saídas R$</small><b class="saidas" id="saidas">0.00</b></div>
+<div class="card"><small>Saldo R$</small><b class="saldo" id="saldo">0.00</b></div>
+</div>
+
+<div class="actions">
+<button class="btn-mini btn-dark" onclick="document.getElementById('fileBackup').click()">♻️ RESTAURAR BACKUP</button>
+<button class="btn-mini btn-dark" onclick="exportar()">💾 EXPORTAR BACKUP</button>
+<button class="btn-mini btn-dark" onclick="compartilhar()">📤 COMPARTILHAR</button>
+<button class="btn-mini btn-yellow" onclick="convidar()">👥 CONVIDAR MEMBROS</button>
+<input type="file" id="fileBackup" hidden accept=".json" onchange="restaurar(this)">
+</div>
+
+<div class="form">
+<select id="tipo" onchange="trocaCategoria()">
+<option value="gasto">📤 Gastei</option>
+<option value="recebido">📥 Recebi</option>
+</select>
+
+<select id="categoria"></select>
+<span class="link-add" onclick="addCategoria()">+ ➕ Adicionar nova categoria</span>
+
+<input id="desc" placeholder="Descrição (Ex: Uber, Moto)">
+<input id="valor" type="number" step="0.01" placeholder="Valor R$">
+<div class="row">
+<input id="dataGasto" type="date">
+<input id="horaGasto" type="time">
+</div>
+<p style="color:#666;font-size:11px;margin:6px 0 0 4px">📅 Data ⏰ Hora</p>
+<button class="btn-main" onclick="salvar()">💾 SALVAR LANÇAMENTO</button>
+</div>
+
+<div id="lista"></div>
+
+<button id="btnInstalar" onclick="instalarApp()">⚙️ 💲 INSTALAR APLICATIVO</button>
+
+<script>
+let gastos=JSON.parse(localStorage.getItem('gastos_v7')||'[]');
+let catsGastos=JSON.parse(localStorage.getItem('cats_gastos')||'["Mercado","Aline Esposa","Aline","Dívidas","Moto","Combustível","Pão","Cigarro","Refrigerante","Empréstimos","Ração","Terceiros","Internet","Luz","Água","Outros"]');
+let catsRecebidos=JSON.parse(localStorage.getItem('cats_recebidos')||'["Salário","Bolsa Família","Salário Extra","Vale Salário","Reciclagem","Pix Recebido","Dívidas Recebidas","Empréstimos","Terceiros","Pagamentos","Outros"]');
+
+function initDH(){let a=new Date();document.getElementById('dataGasto').valueAsDate=a;document.getElementById('horaGasto').value=a.toTimeString().slice(0,5);}initDH();
+
+function trocaCategoria(){
+let tipo=document.getElementById('tipo').value;
+let sel=document.getElementById('categoria');
+let lista = tipo==='recebido' ? catsRecebidos : catsGastos;
+sel.innerHTML='';
+lista.forEach(c=>{let o=document.createElement('option');o.textContent=c;o.value=c;sel.appendChild(o);});
+}
+trocaCategoria();
+
+function addCategoria(){
+let nome=prompt('Digite a nova categoria: Ex: Farmácia, Escola');
+if(!nome) return;
+nome=nome.trim();
+let tipo=document.getElementById('tipo').value;
+if(tipo==='recebido'){if(!catsRecebidos.includes(nome)){catsRecebidos.unshift(nome);localStorage.setItem('cats_recebidos',JSON.stringify(catsRecebidos))}}
+else{if(!catsGastos.includes(nome)){catsGastos.unshift(nome);localStorage.setItem('cats_gastos',JSON.stringify(catsGastos))}}
+trocaCategoria();
+document.getElementById('categoria').value=nome;
+alert('✅ Categoria "'+nome+'" adicionada!');
+}
+
+function salvar(){
+let tipo=document.getElementById('tipo').value;
+let cat=document.getElementById('categoria').value;
+let desc=document.getElementById('desc').value.trim()||cat;
+let valor=parseFloat(document.getElementById('valor').value);
+let data=document.getElementById('dataGasto').value;
+let hora=document.getElementById('horaGasto').value;
+if(!valor){alert('Digite o valor!');return}
+gastos.unshift({id:Date.now(),tipo,cat,desc,valor,data,hora});
+localStorage.setItem('gastos_v7',JSON.stringify(gastos));
+document.getElementById('desc').value='';document.getElementById('valor').value='';initDH();render();
+}
+
+function render(){
+let ent=0,sai=0,html='';
+gastos.forEach(g=>{
+if(g.tipo==='recebido') ent+=g.valor; else sai+=g.valor;
+let dataBr=g.data?g.data.split('-').reverse().join('/'):'';
+let cor = g.tipo==='recebido' ? '#00ff66' : '#ff4444';
+html+=`<div class="item" style="border-left-color:${cor}"><div><b>${g.desc} - R$ ${g.valor.toFixed(2)}</b><small>${g.cat} • 📅 ${dataBr} ⏰ ${g.hora||''}</small></div><button class="trash" onclick="del(${g.id})">🗑️</button></div>`;
+});
+document.getElementById('lista').innerHTML=html||'<p style="text-align:center;color:#555;margin-top:20px">Nenhum gasto ainda.</p>';
+document.getElementById('entradas').innerText=ent.toFixed(2);
+document.getElementById('saidas').innerText=sai.toFixed(2);
+document.getElementById('saldo').innerText=(ent-sai).toFixed(2);
+}
+function del(id){if(confirm('Apagar?')){gastos=gastos.filter(g=>g.id!==id);localStorage.setItem('gastos_v7',JSON.stringify(gastos));render();}}
+function exportar(){let blob=new Blob([JSON.stringify(gastos)],{type:'application/json'});let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`backup-v7-${new Date().toISOString().split('T')[0]}.json`;a.click();}
+function restaurar(input){let file=input.files[0]; if(!file) return; let reader=new FileReader(); reader.onload=e=>{try{let d=JSON.parse(e.target.result); if(Array.isArray(d)){gastos=d; localStorage.setItem('gastos_v7',JSON.stringify(gastos)); render(); alert(`✅ ${d.length} restaurados!`);}}catch{alert('Erro')}}; reader.readAsText(file);}
+function compartilhar(){let t=`💰 Entradas R$ ${document.getElementById('entradas').innerText} | Saídas R$ ${document.getElementById('saidas').innerText} | Saldo R$ ${document.getElementById('saldo').innerText}`; if(navigator.share){navigator.share({title:'Gastos',text:t,url:location.href})} else{prompt('Copie:',t+' '+location.href)}}
+function convidar(){let m=`👋 Tenha controle sobre seus gastos comigo: ${location.href}`; if(navigator.share){navigator.share({title:'Convite',text:m})} else{prompt('Copie:',m)}}
+let promptInstalacao=null;
+window.addEventListener('beforeinstallprompt', (e)=>{e.preventDefault(); promptInstalacao=e; document.getElementById('btnInstalar').style.display='block';});
+async function instalarApp(){if(!promptInstalacao){alert('Android: 3 pontinhos > Instalar app\\niPhone: Compartilhar > Tela Início');return;} promptInstalacao.prompt(); let c=await promptInstalacao.userChoice; if(c.outcome==='accepted'){document.getElementById('btnInstalar').style.display='none';} promptInstalacao=null;}
+window.addEventListener('appinstalled', ()=>{document.getElementById('btnInstalar').style.display='none';});
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js')}
+render();
+</script>
+</body>
+</html>
